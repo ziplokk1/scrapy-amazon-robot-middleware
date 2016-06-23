@@ -168,27 +168,31 @@ class RobotMiddleware(object):
 
     def process_response(self, request, response, spider):
         if not response.url.endswith('.jpg'):
-            if response.xpath('//title/text()[contains(., "Robot Check")]'):
-                self.crawler.stats.inc_value('robot_check')
-                self.logger.warning('robot check (%s)' % request.url)
-                soup = BeautifulSoup(response.body)
+            try:
+                if response.xpath('//title/text()[contains(., "Robot Check")]'):
+                    self.crawler.stats.inc_value('robot_check')
+                    self.logger.warning('robot check (%s)' % request.url)
+                    soup = BeautifulSoup(response.body)
 
-                form = soup.find('form')
+                    form = soup.find('form')
 
-                # Url to send the captcha verification request
-                get_url = 'http://www.amazon.com' + form.get('action')
+                    # Url to send the captcha verification request
+                    get_url = 'http://www.amazon.com' + form.get('action')
 
-                # Get all input params from the form
-                input_params = dict([(x.get('name'), x.get('value')) for x in form.findAll('input', {'type': 'hidden'})])
-                self.logger.debug('input_params: {params} post_url: {get_url}'.format(params=' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]), get_url=get_url))
+                    # Get all input params from the form
+                    input_params = dict([(x.get('name'), x.get('value')) for x in form.findAll('input', {'type': 'hidden'})])
+                    self.logger.debug('input_params: {params} post_url: {get_url}'.format(params=' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]), get_url=get_url))
 
-                meta = {'target_url': get_url,
-                        'params': input_params,
-                        'decode': True}
-                meta.update(request.meta)
-                image_url = form.find('img').get('src')
-                self.logger.debug('image_url=%s' % image_url)
-                return Request(image_url, meta=meta, priority=100)
+                    meta = {'target_url': get_url,
+                            'params': input_params,
+                            'decode': True}
+                    meta.update(request.meta)
+                    image_url = form.find('img').get('src')
+                    self.logger.debug('image_url=%s' % image_url)
+                    return Request(image_url, meta=meta, priority=100)
+            except AttributeError:
+                self.logger.error('Response has no attribute xpath; returning original response')
+                return response
         else:
             self.logger.info('cracking (%s)' % request.url)
             params = request.meta.get('params')
