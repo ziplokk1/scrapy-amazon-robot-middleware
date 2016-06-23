@@ -203,7 +203,7 @@ class RobotMiddleware(object):
             cb = CaptchaBuster(url_tmp_pic)
             params['field-keywords'] = cb.guess
             self.logger.info('Captcha Value: %s' % params['field-keywords'])
-            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100)
+            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100, method='GET')
 
         return response
 
