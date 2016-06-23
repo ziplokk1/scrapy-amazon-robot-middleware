@@ -192,6 +192,8 @@ class RobotMiddleware(object):
                     return Request(image_url, meta=meta, priority=100)
             except AttributeError:
                 self.logger.error('Response has no attribute xpath; returning original response')
+                with open('error-response', 'wb') as f:
+                    f.write(response.body)
                 return response
         else:
             self.logger.info('cracking (%s)' % request.url)
