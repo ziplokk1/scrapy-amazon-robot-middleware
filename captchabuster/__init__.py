@@ -181,6 +181,9 @@ class RobotMiddleware(object):
 
                     # Get all input params from the form
                     input_params = dict([(x.get('name'), x.get('value')) for x in form.findAll('input', {'type': 'hidden'})])
+                    # This amzn-pt key seems to break the request so we delete it from the form data
+                    if 'amzn-pt' in input_params:
+                        del input_params['amzn-pt']
                     self.logger.debug('input_params: {params} post_url: {get_url}'.format(params=' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]), get_url=get_url))
 
                     meta = {'target_url': get_url,
