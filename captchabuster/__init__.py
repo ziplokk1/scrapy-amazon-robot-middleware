@@ -170,31 +170,27 @@ class RobotMiddleware(object):
         if not response.url.endswith('.jpg'):
             if response.xpath('//title/text()[contains(., "Robot Check")]'):
                 self.crawler.stats.inc_value('robot_check')
-                self.logger.warning('Robot Check')
+                self.logger.warning('robot check (%s)' % request.url)
                 soup = BeautifulSoup(response.body)
 
                 form = soup.find('form')
-
-                # Generate the captcha buster object
-                # cb = CaptchaBuster.from_url(form.find('img').get('src'))
 
                 # Url to send the captcha verification request
                 get_url = 'http://www.amazon.com' + form.get('action')
 
                 # Get all input params from the form
                 input_params = dict([(x.get('name'), x.get('value')) for x in form.findAll('input', {'type': 'hidden'})])
+                self.logger.debug('input_params: {params} post_url: {get_url}'.format(params=' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]), get_url=get_url))
 
                 meta = {'target_url': get_url,
                         'params': input_params,
                         'decode': True}
                 meta.update(request.meta)
-                # Set the field keywords param to the captcha buster's guess
-                # input_params['field-keywords'] = cb.guess
-                # self.logger.info('Captcha Value: %s' % input_params['field-keywords'])
-
-                # return FormRequest(get_url, formdata=input_params, meta=request.meta)
-                return Request(form.find('img').get('src'), meta=meta, priority=100)
+                image_url = form.find('img').get('src')
+                self.logger.debug('image_url=%s' % image_url)
+                return Request(image_url, meta=meta, priority=100)
         else:
+            self.logger.info('cracking (%s)' % request.url)
             params = request.meta.get('params')
             target_url = request.meta.get('target_url')
             url_tmp_pic = os.path.join(ROOT, '%s_tmp_captcha.jpg' % uuid.uuid4())
@@ -203,7 +199,7 @@ class RobotMiddleware(object):
             cb = CaptchaBuster(url_tmp_pic)
             params['field-keywords'] = cb.guess
             os.remove(url_tmp_pic)
-            self.logger.info('Captcha Value: %s' % params['field-keywords'])
+            self.logger.info('captcha_value=%s' % params['field-keywords'])
             return FormRequest(target_url, formdata=params, meta=request.meta, priority=100, method='GET')
 
         return response
