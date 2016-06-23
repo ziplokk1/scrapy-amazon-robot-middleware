@@ -189,7 +189,7 @@ class RobotMiddleware(object):
                     meta = {'target_url': get_url,
                             'params': input_params,
                             'decode': True,
-                            'org_url': request.url}
+                            'referer_url': response.url}
                     meta.update(request.meta)
                     image_url = form.find('img').get('src')
                     self.logger.debug('image_url=%s' % image_url)
@@ -210,7 +210,7 @@ class RobotMiddleware(object):
             params['field-keywords'] = cb.guess
             os.remove(url_tmp_pic)
             self.logger.info('captcha_value=%s' % params['field-keywords'])
-            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100, method='GET', headers={'Referer': request.meta.get('org_url'), 'Host': 'www.amazon.com'})
+            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100, method='GET', headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'})
 
         return response
 
