@@ -187,7 +187,7 @@ class RobotMiddleware(object):
                 meta = {'target_url': get_url,
                         'params': input_params,
                         'decode': True}
-                meta = request.meta.update(meta)
+                meta.update(request.meta)
                 # Set the field keywords param to the captcha buster's guess
                 # input_params['field-keywords'] = cb.guess
                 # self.logger.info('Captcha Value: %s' % input_params['field-keywords'])
