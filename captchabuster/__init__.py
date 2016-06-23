@@ -193,7 +193,7 @@ class RobotMiddleware(object):
                 # self.logger.info('Captcha Value: %s' % input_params['field-keywords'])
 
                 # return FormRequest(get_url, formdata=input_params, meta=request.meta)
-                return Request(form.find('img').get('src'), meta=meta)
+                return Request(form.find('img').get('src'), meta=meta, priority=100)
         else:
             params = request.meta.get('params')
             target_url = request.meta.get('target_url')
@@ -203,7 +203,7 @@ class RobotMiddleware(object):
             cb = CaptchaBuster(url_tmp_pic)
             params['field-keywords'] = cb.guess
             self.logger.info('Captcha Value: %s' % params['field-keywords'])
-            return FormRequest(target_url, formdata=params, meta=request.meta)
+            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100)
 
         return response
 
