@@ -1,5 +1,6 @@
 import os
 import tempfile
+import logging
 
 from BeautifulSoup import BeautifulSoup
 from PIL import Image
@@ -156,6 +157,7 @@ class RobotMiddleware(object):
 
     def __init__(self, crawler):
         self.crawler = crawler
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def process_request(self, request, spider):
         return
@@ -166,7 +168,7 @@ class RobotMiddleware(object):
     def process_response(self, request, response, spider):
         if response.xpath('//title/text()[contains(., "Robot Check")]'):
             self.crawler.stats.inc_value('robot_check')
-            self.crawler.logger.warning('Robot Check')
+            self.logger.warning('Robot Check')
             soup = BeautifulSoup(response.body)
 
             form = soup.find('form')
@@ -182,7 +184,7 @@ class RobotMiddleware(object):
 
             # Set the field keywords param to the captcha buster's guess
             input_params['field-keywords'] = cb.guess
-            self.crawler.logger.info('Captcha Value: %s' % input_params['field-keywords'], 20)
+            self.logger.info('Captcha Value: %s' % input_params['field-keywords'], 20)
 
             return FormRequest(get_url, formdata=input_params, meta=request.meta)
 
