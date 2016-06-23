@@ -113,7 +113,7 @@ class CaptchaBuster(object):
             for letter in 'abcdefghijklmnopqrstuvwxyz':
                 letter_dir = os.path.join(ICON_LOC, letter)
                 for img in os.listdir(letter_dir):
-                    if img != 'Thumbs.db':
+                    if img != 'Thumbs.db' and img != '.gitignore':
                         tmp = Image.open(os.path.join(letter_dir, img))
                         s = segment.resize(tmp.size)
                         guess.append((self.relation(self.build_vector(tmp),
