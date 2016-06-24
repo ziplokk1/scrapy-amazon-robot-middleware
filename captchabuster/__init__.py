@@ -194,7 +194,7 @@ class RobotMiddleware(object):
 
             image_url = form.find('img').get('src')
             self.logger.debug('image_url=%s' % image_url)
-            return Request(image_url, meta=meta, priority=self.PRIORITY_ADJUST)
+            return Request(image_url, meta=meta, priority=self.PRIORITY_ADJUST, dont_filter=True)
         elif request.meta.get('is_captcha', False):
             self.logger.info('cracking (%s)' % request.url)
             params = request.meta.get('params')
@@ -206,8 +206,8 @@ class RobotMiddleware(object):
             params['field-keywords'] = cb.guess
             os.remove(url_tmp_pic)
             self.logger.info('captcha_value=%s' % params['field-keywords'])
-            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100, method='GET',
-                               headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'})
+            return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET',
+                               headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'}, dont_filter=True)
         return response
 
     @classmethod
