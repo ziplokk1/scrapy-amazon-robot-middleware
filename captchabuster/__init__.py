@@ -174,8 +174,8 @@ class RobotMiddleware(object):
 
     def process_response(self, request, response, spider):
         self.logger.debug(request.meta)
-        crack_retry_count = request.meta.get('crack_retry_count', 0) + 1
-        if crack_retry_count >= self.MAX_RETRY:
+        crack_count = request.meta.get('crack_retry_count', 0) + 1
+        if crack_count >= self.MAX_RETRY:
             raise IgnoreRequest('Max retries exceeded for url (%s)' % request.meta.get('original_request', request).url)
         if isinstance(response, HtmlResponse) and 'robot check' in ''.join([x.strip().lower() for x in response.xpath('//title/text()').extract()]):
             self.crawler.stats.inc_value('robot_check')
@@ -189,7 +189,7 @@ class RobotMiddleware(object):
             form_url = 'http://www.amazon.com' + form.get('action')
 
             # get all input params in the form. the only ones that are in the form are hidden
-            input_params = {x.get('name'): x.get('value') for x in form.findAll('input', {'type': 'hidden'})}
+            input_params = {x.get('name'): x.get('value') for x in form.findAll('input')}
 
             self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
 
@@ -200,7 +200,7 @@ class RobotMiddleware(object):
                     'referer_url': request.meta.get('referer_url') or response.url,
                     'original_request': request,
                     'is_captcha': True,
-                    'crack_retry_count': crack_retry_count}
+                    'crack_retry_count': crack_count}
             request.meta.update(meta)
 
             image_url = form.find('img').get('src')
@@ -222,7 +222,8 @@ class RobotMiddleware(object):
                 # os.remove(url_tmp_pic)
                 return request.meta.get('original_request')
             self.logger.info('captcha_value=%s' % params['field-keywords'])
-            meta = {'crack_retry_count': crack_retry_count}
+            request.meta['is_captcha'] = False
+            meta = {'crack_retry_count': crack_count}
             request.meta.update(meta)
             return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET',
                                headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'}, dont_filter=True, callback=request.callback)
