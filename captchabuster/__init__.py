@@ -207,7 +207,6 @@ class RobotMiddleware(object):
             self.logger.debug('image_url=%s' % image_url)
             return Request(image_url, meta=request.meta, priority=self.PRIORITY_ADJUST, dont_filter=True, callback=request.callback)
         elif request.meta.get('is_captcha', False):
-            self.logger.info('cracking %s' % request)
             params = request.meta.get('params')
             target_url = request.meta.get('target_url')
             # Occasionally the image will come back with no data, so retry
@@ -218,7 +217,7 @@ class RobotMiddleware(object):
                 params['field-keywords'] = cb.guess
             except IOError:
                 return request.meta.get('original_request')
-            self.logger.info('captcha_value=%s' % params['field-keywords'])
+            self.logger.info('captcha_value=%s %s' % (params['field-keywords'], request))
             request.meta['is_captcha'] = False
             meta = {'crack_retry_count': crack_count}
             request.meta.update(meta)
