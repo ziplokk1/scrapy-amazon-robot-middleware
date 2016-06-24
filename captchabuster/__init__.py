@@ -225,8 +225,7 @@ class RobotMiddleware(object):
             request.meta['is_captcha'] = False
             meta = {'crack_retry_count': crack_count}
             request.meta.update(meta)
-            return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET',
-                               headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'}, dont_filter=True, callback=request.callback)
+            return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET', dont_filter=True, callback=request.callback)
         return response
 
     @classmethod
