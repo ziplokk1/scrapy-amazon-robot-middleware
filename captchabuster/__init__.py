@@ -176,11 +176,11 @@ class RobotMiddleware(object):
         # self.logger.debug(request.meta)
         crack_count = request.meta.get('crack_retry_count', 0) + 1
         if crack_count >= self.MAX_RETRY:
-            raise IgnoreRequest('Max retries exceeded for url (%s)' % request.meta.get('original_request', request).url)
+            raise IgnoreRequest('Max retries exceeded %s' % request.meta.get('original_request', request))
         if isinstance(response, HtmlResponse) and 'robot check' in ''.join([x.strip().lower() for x in response.xpath('//title/text()').extract()]):
             self.crawler.stats.inc_value('robot_check')
             # Log the url of the original request that got blocked
-            self.logger.warning('robot check (%s)' % request.url)
+            self.logger.warning('robot check %s' % request)
 
             soup = BeautifulSoup(response.body)
             form = soup.find('form')
@@ -207,7 +207,7 @@ class RobotMiddleware(object):
             self.logger.debug('image_url=%s' % image_url)
             return Request(image_url, meta=request.meta, priority=self.PRIORITY_ADJUST, dont_filter=True, callback=request.callback)
         elif request.meta.get('is_captcha', False):
-            self.logger.info('cracking (%s)' % request.url)
+            self.logger.info('cracking ' % request)
             params = request.meta.get('params')
             target_url = request.meta.get('target_url')
             # Occasionally the image will come back with no data, so retry
