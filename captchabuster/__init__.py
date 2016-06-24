@@ -204,9 +204,13 @@ class RobotMiddleware(object):
             url_tmp_pic = os.path.join(ROOT, '%s_tmp_captcha.jpg' % uuid.uuid4())
             with open(url_tmp_pic, 'wb') as f:
                 f.write(response.body)
-            cb = CaptchaBuster(url_tmp_pic)
-            params['field-keywords'] = cb.guess
-            os.remove(url_tmp_pic)
+            try:  # Occasionally the image will come back with no data, so retry if that happens
+                cb = CaptchaBuster(url_tmp_pic)
+                params['field-keywords'] = cb.guess
+                os.remove(url_tmp_pic)
+            except IOError:
+                os.remove(url_tmp_pic)
+                return request
             self.logger.info('captcha_value=%s' % params['field-keywords'])
             return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET',
                                headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'}, dont_filter=True)
