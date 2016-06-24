@@ -210,16 +210,13 @@ class RobotMiddleware(object):
             self.logger.info('cracking (%s)' % request.url)
             params = request.meta.get('params')
             target_url = request.meta.get('target_url')
-            # url_tmp_pic = os.path.join(ROOT, '%s_tmp_captcha.jpg' % uuid.uuid4())
-            # with open(url_tmp_pic, 'wb') as f:
-            #     f.write(response.body)
-            try:  # Occasionally the image will come back with no data, so retry if that happens
+            # Occasionally the image will come back with no data, so retry
+            # the original request if that happens
+            try:
                 pic_data = StringIO(response.body)
                 cb = CaptchaBuster(pic_data)
                 params['field-keywords'] = cb.guess
-                # os.remove(url_tmp_pic)
             except IOError:
-                # os.remove(url_tmp_pic)
                 return request.meta.get('original_request')
             self.logger.info('captcha_value=%s' % params['field-keywords'])
             request.meta['is_captcha'] = False
