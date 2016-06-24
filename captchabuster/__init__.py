@@ -7,6 +7,7 @@ from BeautifulSoup import BeautifulSoup
 from PIL import Image
 import requests
 from scrapy import FormRequest, Request
+from scrapy.exceptions import IgnoreRequest
 from scrapy.http.response.html import HtmlResponse
 
 ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -158,6 +159,7 @@ def test():
 class RobotMiddleware(object):
 
     PRIORITY_ADJUST = 100
+    MAX_RETRY = 3
 
     def __init__(self, crawler):
         self.crawler = crawler
@@ -185,19 +187,24 @@ class RobotMiddleware(object):
             input_params = {x.get('name'): x.get('value') for x in form.findAll('input', {'type': 'hidden'})}
 
             self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
+            crack_retry_count = request.meta.get('crack_retry_count', 0)+1
 
-            # Sometimes the captcha cracker is wrong, which will redirect to another captcha and
-            # we want to use the original request url for our referer.
-            meta = {'target_url': form_url,
-                    'params': input_params,
-                    'referer_url': request.meta.get('referer_url') or response.url,
-                    'original_request': request,
-                    'is_captcha': True}
-            meta.update(request.meta)
+            if crack_retry_count < self.MAX_RETRY:
+                # Sometimes the captcha cracker is wrong, which will redirect to another captcha and
+                # we want to use the original request url for our referer.
+                meta = {'target_url': form_url,
+                        'params': input_params,
+                        'referer_url': request.meta.get('referer_url') or response.url,
+                        'original_request': request,
+                        'is_captcha': True,
+                        'crack_retry_count': crack_retry_count}
+                meta.update(request.meta)
 
-            image_url = form.find('img').get('src')
-            self.logger.debug('image_url=%s' % image_url)
-            return Request(image_url, meta=meta, priority=self.PRIORITY_ADJUST, dont_filter=True)
+                image_url = form.find('img').get('src')
+                self.logger.debug('image_url=%s' % image_url)
+                return Request(image_url, meta=meta, priority=self.PRIORITY_ADJUST, dont_filter=True)
+            else:
+                raise IgnoreRequest('Max Retries Exceeded For Url (%s)' % request.meta.get('original_request', request).url)
         elif request.meta.get('is_captcha', False):
             self.logger.info('cracking (%s)' % request.url)
             params = request.meta.get('params')
