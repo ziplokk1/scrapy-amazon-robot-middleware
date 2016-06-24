@@ -1,3 +1,5 @@
+import urllib
+
 import os
 import tempfile
 import uuid
@@ -205,7 +207,7 @@ class RobotMiddleware(object):
 
             image_url = form.find('img').get('src')
             # self.logger.debug('image_url=%s' % image_url)
-            return Request(image_url, meta=request.meta, priority=self.PRIORITY_ADJUST, dont_filter=True, callback=request.callback)
+            return request.replace(priority=self.PRIORITY_ADJUST, dont_filter=True, url=image_url)
         elif request.meta.get('is_captcha', False):
             params = request.meta.get('params')
             target_url = request.meta.get('target_url')
@@ -221,7 +223,8 @@ class RobotMiddleware(object):
             request.meta['is_captcha'] = False
             meta = {'crack_retry_count': crack_count}
             request.meta.update(meta)
-            return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET', dont_filter=True, callback=request.callback)
+            return request.replace(url=target_url+'?'+urllib.urlencode(params), dont_filter=True)
+            # return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET', dont_filter=True, callback=request.callback)
         return response
 
     @classmethod
