@@ -7,6 +7,7 @@ from BeautifulSoup import BeautifulSoup
 from PIL import Image
 import requests
 from scrapy import FormRequest, Request
+from scrapy.http.response.html import HtmlResponse
 
 ROOT = os.path.abspath(os.path.dirname(__file__))
 ICON_LOC = os.path.join(ROOT, 'iconset')
@@ -156,6 +157,8 @@ def test():
 
 class RobotMiddleware(object):
 
+    PRIORITY_ADJUST = 100
+
     def __init__(self, crawler):
         self.crawler = crawler
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -167,39 +170,32 @@ class RobotMiddleware(object):
         return
 
     def process_response(self, request, response, spider):
-        if not response.url.endswith('.jpg'):
-            try:
-                if response.xpath('//title/text()[contains(., "Robot Check")]'):
-                    self.crawler.stats.inc_value('robot_check')
-                    self.logger.warning('robot check (%s)' % request.url)
-                    soup = BeautifulSoup(response.body)
+        if isinstance(response, HtmlResponse) and response.xpath('//title/text()[contains(., "Robot Check")]'):
+            self.crawler.stats.inc_value('robot_check')
+            # Log the url of the original request that got blocked
+            self.logger.warning('robot check (%s)' % request.url)
 
-                    form = soup.find('form')
+            soup = BeautifulSoup(response.body)
+            form = soup.find('form')
 
-                    # Url to send the captcha verification request
-                    get_url = 'http://www.amazon.com' + form.get('action')
+            # url to send the captcha verification request
+            form_url = 'http://www.amazon.com' + form.get('action')
 
-                    # Get all input params from the form
-                    input_params = dict([(x.get('name'), x.get('value')) for x in form.findAll('input', {'type': 'hidden'})])
-                    # This amzn-pt key seems to break the request so we delete it from the form data
-                    if 'amzn-pt' in input_params:
-                        del input_params['amzn-pt']
-                    self.logger.debug('input_params: {params} post_url: {get_url}'.format(params=' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]), get_url=get_url))
+            # get all input params in the form. the only ones that are in the form are hidden
+            input_params = {x.get('name'): x.get('value') for x in form.findAll('input', {'type': 'hidden'})}
 
-                    meta = {'target_url': get_url,
-                            'params': input_params,
-                            'decode': True,
-                            'referer_url': response.url}
-                    meta.update(request.meta)
-                    image_url = form.find('img').get('src')
-                    self.logger.debug('image_url=%s' % image_url)
-                    return Request(image_url, meta=meta, priority=100)
-            except AttributeError:
-                self.logger.error('Response has no attribute xpath; returning original response')
-                with open('error-response', 'wb') as f:
-                    f.write(response.body)
-                return response
-        else:
+            self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
+
+            meta = {'target_url': form_url,
+                    'params': input_params,
+                    'referer_url': response.url,
+                    'is_captcha': True}
+            meta.update(request.meta)
+
+            image_url = form.find('img').get('src')
+            self.logger.debug('image_url=%s' % image_url)
+            return Request(image_url, meta=meta, priority=self.PRIORITY_ADJUST)
+        elif request.meta.get('is_captcha', False):
             self.logger.info('cracking (%s)' % request.url)
             params = request.meta.get('params')
             target_url = request.meta.get('target_url')
@@ -210,8 +206,8 @@ class RobotMiddleware(object):
             params['field-keywords'] = cb.guess
             os.remove(url_tmp_pic)
             self.logger.info('captcha_value=%s' % params['field-keywords'])
-            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100, method='GET', headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'})
-
+            return FormRequest(target_url, formdata=params, meta=request.meta, priority=100, method='GET',
+                               headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'})
         return response
 
     @classmethod
