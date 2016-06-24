@@ -173,7 +173,7 @@ class RobotMiddleware(object):
         return
 
     def process_response(self, request, response, spider):
-        self.logger.debug(request.meta)
+        # self.logger.debug(request.meta)
         crack_count = request.meta.get('crack_retry_count', 0) + 1
         if crack_count >= self.MAX_RETRY:
             raise IgnoreRequest('Max retries exceeded for url (%s)' % request.meta.get('original_request', request).url)
@@ -191,7 +191,7 @@ class RobotMiddleware(object):
             # get all input params in the form. the only ones that are in the form are hidden
             input_params = {x.get('name'): x.get('value') for x in form.findAll('input')}
 
-            self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
+            # self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
 
             # Sometimes the captcha cracker is wrong, which will redirect to another captcha and
             # we want to use the original request url for our referer.
