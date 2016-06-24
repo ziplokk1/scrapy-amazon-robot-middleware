@@ -170,7 +170,7 @@ class RobotMiddleware(object):
         return
 
     def process_response(self, request, response, spider):
-        if isinstance(response, HtmlResponse) and response.xpath('//title/text()[contains(., "Robot Check")]'):
+        if isinstance(response, HtmlResponse) and 'robot check' in ''.join([x.strip().lower() for x in response.xpath('//title/text()').extract()]):
             self.crawler.stats.inc_value('robot_check')
             # Log the url of the original request that got blocked
             self.logger.warning('robot check (%s)' % request.url)
@@ -186,9 +186,11 @@ class RobotMiddleware(object):
 
             self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
 
+            # Sometimes the captcha cracker is wrong, which will redirect to another captcha and
+            # we want to use the original request url for our referer.
             meta = {'target_url': form_url,
                     'params': input_params,
-                    'referer_url': response.url,
+                    'referer_url': request.meta.get('referer_url') or response.url,
                     'is_captcha': True}
             meta.update(request.meta)
 
