@@ -166,12 +166,6 @@ class RobotMiddleware(object):
         self.crawler = crawler
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def process_request(self, request, spider):
-        return
-
-    def process_exception(self, request, exception, spider):
-        return
-
     def process_response(self, request, response, spider):
         self.logger.debug(request.meta)
         crack_retry_count = request.meta.get('crack_retry_count', 0) + 1
