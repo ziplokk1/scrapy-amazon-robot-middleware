@@ -10,8 +10,9 @@ The middleware checks for "Robot Check" in the title of the page and if the stri
 
 In settings.py
 ```python
+# Keep the middleware as close to the spiders as possible (less than 100)
 DOWNLOADER_MIDDLEWARES = {
-    'captchabuster.RobotMiddleware': 450
+    'captchabuster.RobotMiddleware': 90
 }
 ```
 
