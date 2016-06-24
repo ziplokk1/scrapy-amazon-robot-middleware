@@ -204,7 +204,7 @@ class RobotMiddleware(object):
             request.meta.update(meta)
 
             image_url = form.find('img').get('src')
-            self.logger.debug('image_url=%s' % image_url)
+            # self.logger.debug('image_url=%s' % image_url)
             return Request(image_url, meta=request.meta, priority=self.PRIORITY_ADJUST, dont_filter=True, callback=request.callback)
         elif request.meta.get('is_captcha', False):
             params = request.meta.get('params')
