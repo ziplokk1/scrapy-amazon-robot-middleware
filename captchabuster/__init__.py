@@ -172,6 +172,7 @@ class RobotMiddleware(object):
         return
 
     def process_response(self, request, response, spider):
+        self.logger.debug(request.meta)
         crack_retry_count = request.meta.get('crack_retry_count', 0) + 1
         if crack_retry_count >= self.MAX_RETRY:
             raise IgnoreRequest('Max retries exceeded for url (%s)' % request.meta.get('original_request', request).url)
