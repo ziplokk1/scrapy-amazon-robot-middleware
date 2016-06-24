@@ -166,6 +166,12 @@ class RobotMiddleware(object):
         self.crawler = crawler
         self.logger = logging.getLogger(self.__class__.__name__)
 
+    def process_request(self, request, spider):
+        return
+
+    def process_exception(self, request, exception, spider):
+        return
+
     def process_response(self, request, response, spider):
         self.logger.debug(request.meta)
         crack_retry_count = request.meta.get('crack_retry_count', 0) + 1
@@ -199,7 +205,7 @@ class RobotMiddleware(object):
 
             image_url = form.find('img').get('src')
             self.logger.debug('image_url=%s' % image_url)
-            return Request(image_url, meta=request.meta, priority=self.PRIORITY_ADJUST, dont_filter=True)
+            return Request(image_url, meta=request.meta, priority=self.PRIORITY_ADJUST, dont_filter=True, callback=request.callback)
         elif request.meta.get('is_captcha', False):
             self.logger.info('cracking (%s)' % request.url)
             params = request.meta.get('params')
@@ -219,7 +225,7 @@ class RobotMiddleware(object):
             meta = {'crack_retry_count': crack_retry_count}
             request.meta.update(meta)
             return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET',
-                               headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'}, dont_filter=True)
+                               headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'}, dont_filter=True, callback=request.callback)
         return response
 
     @classmethod
