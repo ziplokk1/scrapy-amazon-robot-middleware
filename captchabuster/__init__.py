@@ -191,6 +191,7 @@ class RobotMiddleware(object):
             meta = {'target_url': form_url,
                     'params': input_params,
                     'referer_url': request.meta.get('referer_url') or response.url,
+                    'original_request': request,
                     'is_captcha': True}
             meta.update(request.meta)
 
@@ -210,7 +211,7 @@ class RobotMiddleware(object):
                 os.remove(url_tmp_pic)
             except IOError:
                 os.remove(url_tmp_pic)
-                return request
+                return request.meta.get('original_request')
             self.logger.info('captcha_value=%s' % params['field-keywords'])
             return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET',
                                headers={'Referer': request.meta.get('referer_url'), 'Host': 'www.amazon.com'}, dont_filter=True)
