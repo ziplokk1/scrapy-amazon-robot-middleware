@@ -21,3 +21,7 @@ DOWNLOADER_MIDDLEWARES = {
 Clone the repository locally.
 
 `pip install -e /path/to/captchabuster/`
+
+OR
+ 
+`pip install git+https://github.com/ziplokk1/scrapy-amazon-robot-middleware.git`
