@@ -3,6 +3,7 @@ import urllib
 import os
 import tempfile
 import uuid
+import time
 import logging
 from cStringIO import StringIO
 
@@ -162,70 +163,78 @@ def test():
 class RobotMiddleware(object):
 
     PRIORITY_ADJUST = 100
-    MAX_RETRY = 3
+    MAX_RETRY = 20
 
     def __init__(self, crawler):
         self.crawler = crawler
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.cracking = False
 
     def process_request(self, request, spider):
-        return
+        if request.meta.get('from_captchabuster_middleware', False):
+            return
+        if self.cracking:
+            # Just keep juggling the request in memory/queue while the cracker is attempting to crack the
+            # first request
+            return request
 
-    def process_exception(self, request, exception, spider):
-        return
+    def request_image(self, request, response):
+
+        # Im using beautiful soup because recursive element selection is built in and makes it easier
+        # to parse the form inputs out into a dict.
+        soup = BeautifulSoup(response.body)
+        form = soup.find('form')
+
+        action = 'http://www.amazon.com' + form.get('action')
+        params = {x.get('name'): x.get('value') for x in form.findAll('input')}
+        url = form.find('img').get('src')
+
+        meta = {
+            'form_action': action,
+            'form_params': params,
+            'original_request': request.meta.get('original_request') or request,
+            'crack_retry_count': request.meta.get('crack_retry_count', 0) + 1,
+            'image_request': True,
+            'from_captchabuster_middleware': True
+        }
+
+        request.meta.update(meta)
+        return request.replace(url=url, dont_filter=True)
+
+    def process_image(self, request, response):
+        form_params = request.meta.get('form_params')
+        form_action = request.meta.get('form_action')
+
+        # Occasionally the image will come back with no data or no image but instead html,
+        # so retry the original request if that happens so that it filters back down the middleware
+        try:
+            picture = StringIO(response.body)
+            cb = CaptchaBuster(picture)
+            form_params['field-keywords'] = cb.guess
+        except IOError:
+            return request.meta.get('original_request')
+        request.meta['image_request'] = False
+        request.meta['captcha_submit'] = True
+        url = form_action + '?' + urllib.urlencode(form_params)
+        return request.replace(url=url, dont_filter=True)
 
     def process_response(self, request, response, spider):
-        # self.logger.debug(request.meta)
-        crack_count = request.meta.get('crack_retry_count', 0) + 1
-        if crack_count >= self.MAX_RETRY:
+
+        if request.meta.get('crack_retry_count', 0) > self.MAX_RETRY:
             raise IgnoreRequest('Max retries exceeded %s' % request.meta.get('original_request', request))
+
         if isinstance(response, HtmlResponse) and 'robot check' in ''.join([x.strip().lower() for x in response.xpath('//title/text()').extract()]):
+            self.cracking = True
             self.crawler.stats.inc_value('robot_check')
             # Log the url of the original request that got blocked
-            self.logger.warning('robot check %s' % request)
-
-            soup = BeautifulSoup(response.body)
-            form = soup.find('form')
-
-            # url to send the captcha verification request
-            form_url = 'http://www.amazon.com' + form.get('action')
-
-            # get all input params in the form. the only ones that are in the form are hidden
-            input_params = {x.get('name'): x.get('value') for x in form.findAll('input')}
-
-            # self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
-
-            # Sometimes the captcha cracker is wrong, which will redirect to another captcha and
-            # we want to use the original request url for our referer.
-            meta = {'target_url': form_url,
-                    'params': input_params,
-                    'referer_url': request.meta.get('referer_url') or response.url,
-                    'original_request': request,
-                    'is_captcha': True,
-                    'crack_retry_count': crack_count}
-            request.meta.update(meta)
-
-            image_url = form.find('img').get('src')
-            # self.logger.debug('image_url=%s' % image_url)
-            return request.replace(priority=self.PRIORITY_ADJUST, dont_filter=True, url=image_url)
-        elif request.meta.get('is_captcha', False):
-            params = request.meta.get('params')
-            target_url = request.meta.get('target_url')
-            # Occasionally the image will come back with no data, so retry
-            # the original request if that happens
-            try:
-                pic_data = StringIO(response.body)
-                cb = CaptchaBuster(pic_data)
-                params['field-keywords'] = cb.guess
-            except IOError:
-                return request.meta.get('original_request')
-            self.logger.info('captcha_value=%s %s' % (params['field-keywords'], request))
-            request.meta['is_captcha'] = False
-            meta = {'crack_retry_count': crack_count}
-            request.meta.update(meta)
-            return request.replace(url=target_url+'?'+urllib.urlencode(params), dont_filter=True)
-            # return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET', dont_filter=True, callback=request.callback)
-        return response
+            self.logger.warning('robot check {}'.format(request.meta.get('original_request') or request))
+            return self.request_image(request, response)
+        elif request.meta.get('image_request', False):
+            self.logger.debug('processing image {}'.format(request))
+            return self.process_image(request, response)
+        else:
+            self.cracking = False
+            return response
 
     @classmethod
     def from_crawler(cls, crawler):
