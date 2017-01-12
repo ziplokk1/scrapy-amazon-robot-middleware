@@ -160,6 +160,31 @@ def test():
         print 'Pass %d:' % t, cb.guess
 
 
+class SessionTransferMiddleware(object):
+    """
+    Attach a new cookie jar to request when the status code is in the handle list.
+    """
+
+    current_cookie = 1
+    handle = [503]
+
+    def __init__(self, crawler):
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def process_response(self, request, response, spider):
+        if response.status in self.handle:
+            cookie = self.current_cookie + 1
+            meta = request.meta
+            meta = meta.update({'cookiejar': cookie})
+            self.current_cookie = cookie
+            return request.replace(meta=meta)
+        return response
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        return cls(crawler)
+
+
 class RobotMiddleware(object):
 
     PRIORITY_ADJUST = 100
