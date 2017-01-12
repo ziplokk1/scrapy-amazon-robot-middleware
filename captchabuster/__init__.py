@@ -171,12 +171,13 @@ class RobotMiddleware(object):
         self.cracking = False
 
     def process_request(self, request, spider):
-        if request.meta.get('from_captchabuster_middleware', False):
-            return
-        if self.cracking:
-            # Just keep juggling the request in memory/queue while the cracker is attempting to crack the
-            # first request
-            return request
+        return
+        # if request.meta.get('from_captchabuster_middleware', False):
+        #     return
+        # if self.cracking:
+        #     # Just keep juggling the request in memory/queue while the cracker is attempting to crack the
+        #     # first request
+        #     return request
 
     def request_image(self, request, response):
 
