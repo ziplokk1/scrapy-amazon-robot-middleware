@@ -174,6 +174,7 @@ class SessionTransferMiddleware(object):
     def process_response(self, request, response, spider):
         if response.status in self.handle:
             cookie = self.current_cookie + 1
+            self.logger.info('transferring request to new cookiejar. cookiejar={} {}'.format(cookie, request))
             meta = request.meta
             meta = meta.update({'cookiejar': cookie})
             self.current_cookie = cookie
