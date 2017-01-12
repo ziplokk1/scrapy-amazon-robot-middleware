@@ -1,16 +1,11 @@
 import urllib
-
 import os
-import tempfile
-import uuid
-import time
 import logging
 from cStringIO import StringIO
 
 from BeautifulSoup import BeautifulSoup
 from PIL import Image
 import requests
-from scrapy import FormRequest, Request
 from scrapy.exceptions import IgnoreRequest
 from scrapy.http.response.html import HtmlResponse
 
@@ -22,8 +17,8 @@ class CaptchaBuster(object):
 
     def __init__(self, captcha_loc):
         self.original = Image.open(captcha_loc).convert('P')
-        self.temp_file = tempfile.TemporaryFile(suffix='.gif', prefix='CaptchaTemp_', dir=ROOT)
-        self.image_segment_files = [tempfile.TemporaryFile(suffix='.gif', prefix='%d_ImageSegment_' % n, dir=ROOT) for n in range(6)]
+        self.temp_file = StringIO()
+        self.image_segment_files = [StringIO() for n in range(6)]
         self.image_segments = []
         self.processed_captcha = Image.new('P', self.original.size, 255)
 
@@ -48,11 +43,8 @@ class CaptchaBuster(object):
         """
         if not session:
             session = requests.Session()
-        url_tmp_pic = os.path.join(ROOT, 'captcha.jpg')
-        with open(url_tmp_pic, 'wb') as f:
-            f.write(session.get(url).content)
-
-        return CaptchaBuster(url_tmp_pic)
+        io = StringIO(session.get(url).content)
+        return CaptchaBuster(io)
 
     def _pre_process_captcha(self):
         """
