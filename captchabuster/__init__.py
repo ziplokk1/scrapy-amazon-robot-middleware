@@ -238,7 +238,8 @@ class RobotMiddleware(object):
             cb = CaptchaBuster(picture)
             form_params['field-keywords'] = cb.guess
         except IOError:
-            return request.meta.get('original_request')
+            self.logger.warning('error processing image. {}'.format(response))
+            return request.meta.get('original_request').replace(dont_filter=True)
         request.meta['image_request'] = False
         request.meta['captcha_submit'] = True
         url = form_action + '?' + urllib.urlencode(form_params)
