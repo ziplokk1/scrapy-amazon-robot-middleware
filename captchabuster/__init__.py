@@ -6,6 +6,7 @@ from cStringIO import StringIO
 from BeautifulSoup import BeautifulSoup
 from PIL import Image
 import requests
+from collections import defaultdict
 from scrapy.exceptions import IgnoreRequest
 from scrapy.http.response.html import HtmlResponse
 
@@ -26,7 +27,7 @@ class CaptchaBuster(object):
     def guess(self):
         self._pre_process_captcha()
         self._crop_partitions()
-        return ''.join([p[0][1] for p in self._guess_characters()])
+        return ''.join(self._guess_characters())
 
     @classmethod
     def from_url(cls, url, session=None):
@@ -108,48 +109,54 @@ class CaptchaBuster(object):
         captcha = []
         for segment in self.image_segments:
             guess = []
-            for letter in 'abcdefghijklmnopqrstuvwxyz':
-                letter_dir = os.path.join(ICON_LOC, letter)
-                for img in os.listdir(letter_dir):
-                    if img != 'Thumbs.db' and img != '.gitignore':
-                        tmp = Image.open(os.path.join(letter_dir, img))
-                        s = segment.resize(tmp.size)
-                        guess.append((self.relation(self.build_vector(tmp),
-                                                    self.build_vector(s)), letter))
-            guess.sort(reverse=True)
-            captcha.append(guess)
+            for letter, img_data_list in images.items():
+                guess.extend(map(
+                    lambda x: (self.relation(x['data'], segment.resize(x['image'].size).getdata()), letter),
+                    img_data_list))
+            guess = max(guess)
+            captcha.append(guess[1])
         return captcha
-
-    @classmethod
-    def build_vector(cls, img):
-        d1 = {}
-        for count, i in enumerate(img.getdata()):
-            d1[count] = i
-        return d1
 
     @classmethod
     def relation(cls, concordance1, concordance2):
         """
 
         """
-        relevance = 0
-        for word, count in concordance1.iteritems():
-            if word in concordance2 and count == concordance2[word]:
-                if not count:
-                    relevance += 5 if not count else 1
-        return float(relevance)/float(len(concordance2))
+        r = 0
+        l = len(concordance1)
+        for i in xrange(l):
+            if (not concordance1[i]) and (concordance1[i] == concordance2[i]):
+                r += 5
+        return r/float(l)
+
+
+def load_images():
+    d = defaultdict(list)
+    for letter in 'abcdefghijklmnopqrstuvwxyz':
+        letter_dir = os.path.join(ICON_LOC, letter)
+        for img in os.listdir(letter_dir):
+            if img != 'Thumbs.db' and img != '.gitignore':
+                i = Image.open(os.path.join(letter_dir, img))
+                v = i.getdata()
+                d[letter].append({'image': i, 'data': v})
+    return d
+
+
+images = load_images()
 
 
 def test():
-    for t in range(5):
-        session = requests.Session()
-        response = session.get('http://www.amazon.com/errors/validateCaptcha')
-        soup = BeautifulSoup(response.content)
-        with open('./%d_captcha.jpg' % t, 'wb') as f:
-            f.write(session.get(soup.find('img').get('src')).content)
+    # for t in range(5):
+    session = requests.Session()
+    response = session.get('http://www.amazon.com/errors/validateCaptcha')
+    soup = BeautifulSoup(response.content)
+    # with open('./%d_captcha.jpg' % t, 'wb') as f:
+    #     f.write(session.get(soup.find('img').get('src')).content)
 
-        cb = CaptchaBuster('./%d_captcha.jpg' % t)
-        print 'Pass %d:' % t, cb.guess
+    # cb = CaptchaBuster('./%d_captcha.jpg' % t)
+    cb = CaptchaBuster(StringIO(session.get(soup.find('img').get('src')).content))
+    print cb.guess
+    # print 'Pass %d:' % t, cb.guess
 
 
 class SessionTransferMiddleware(object):
