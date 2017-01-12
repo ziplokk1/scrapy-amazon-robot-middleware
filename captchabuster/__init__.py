@@ -258,6 +258,8 @@ class RobotMiddleware(object):
         elif request.meta.get('image_request', False):
             self.logger.debug('processing image {}'.format(request))
             return self.process_image(request, response)
+        elif request.meta.get('captcha_submit', False):
+            return request.meta.get('original_request') or response
         else:
             self.cracking = False
             return response
