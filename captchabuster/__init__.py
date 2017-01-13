@@ -57,7 +57,9 @@ class CaptchaBuster(object):
         """
         if not session:
             session = requests.Session()
-        io = StringIO(session.get(url, headers={'Accept': 'image/png;q=0.8,*/*;q=0.9'}).content)
+        h = requests.utils.default_headers()
+        h['User-Agent'] = session.headers['User-Agent']
+        io = StringIO(session.get(url, headers=h).content)
         return CaptchaBuster(io)
 
     def _pre_process_captcha(self):
