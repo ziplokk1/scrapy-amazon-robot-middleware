@@ -159,6 +159,7 @@ def crack_from_requests(session, content):
 
 
 def load_images():
+    logging.getLogger('captchabuster').info('preprocessing images...')
     d = defaultdict(list)
     for letter in 'abcdefghijklmnopqrstuvwxyz':
         letter_dir = os.path.join(ICON_LOC, letter)
