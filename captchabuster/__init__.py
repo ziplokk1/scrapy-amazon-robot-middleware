@@ -1,13 +1,12 @@
+import urllib
 import os
-import tempfile
-import uuid
 import logging
 from cStringIO import StringIO
 
 from BeautifulSoup import BeautifulSoup
 from PIL import Image
 import requests
-from scrapy import FormRequest, Request
+from collections import defaultdict
 from scrapy.exceptions import IgnoreRequest
 from scrapy.http.response.html import HtmlResponse
 
@@ -19,8 +18,8 @@ class CaptchaBuster(object):
 
     def __init__(self, captcha_loc):
         self.original = Image.open(captcha_loc).convert('P')
-        self.temp_file = tempfile.TemporaryFile(suffix='.gif', prefix='CaptchaTemp_', dir=ROOT)
-        self.image_segment_files = [tempfile.TemporaryFile(suffix='.gif', prefix='%d_ImageSegment_' % n, dir=ROOT) for n in range(6)]
+        self.temp_file = StringIO()
+        self.image_segment_files = [StringIO() for n in range(6)]
         self.image_segments = []
         self.processed_captcha = Image.new('P', self.original.size, 255)
 
@@ -28,7 +27,7 @@ class CaptchaBuster(object):
     def guess(self):
         self._pre_process_captcha()
         self._crop_partitions()
-        return ''.join([p[0][1] for p in self._guess_characters()])
+        return ''.join(self._guess_characters())
 
     @classmethod
     def from_url(cls, url, session=None):
@@ -45,11 +44,8 @@ class CaptchaBuster(object):
         """
         if not session:
             session = requests.Session()
-        url_tmp_pic = os.path.join(ROOT, 'captcha.jpg')
-        with open(url_tmp_pic, 'wb') as f:
-            f.write(session.get(url).content)
-
-        return CaptchaBuster(url_tmp_pic)
+        io = StringIO(session.get(url).content)
+        return CaptchaBuster(io)
 
     def _pre_process_captcha(self):
         """
@@ -113,116 +109,159 @@ class CaptchaBuster(object):
         captcha = []
         for segment in self.image_segments:
             guess = []
-            for letter in 'abcdefghijklmnopqrstuvwxyz':
-                letter_dir = os.path.join(ICON_LOC, letter)
-                for img in os.listdir(letter_dir):
-                    if img != 'Thumbs.db' and img != '.gitignore':
-                        tmp = Image.open(os.path.join(letter_dir, img))
-                        s = segment.resize(tmp.size)
-                        guess.append((self.relation(self.build_vector(tmp),
-                                                    self.build_vector(s)), letter))
-            guess.sort(reverse=True)
-            captcha.append(guess)
+            for letter, img_data_list in images.items():
+                guess.extend(map(
+                    lambda x: (self.relation(x['data'], segment.resize(x['image'].size).getdata()), letter),
+                    img_data_list))
+            guess = max(guess)
+            captcha.append(guess[1])
         return captcha
-
-    @classmethod
-    def build_vector(cls, img):
-        d1 = {}
-        for count, i in enumerate(img.getdata()):
-            d1[count] = i
-        return d1
 
     @classmethod
     def relation(cls, concordance1, concordance2):
         """
 
         """
-        relevance = 0
-        for word, count in concordance1.iteritems():
-            if word in concordance2 and count == concordance2[word]:
-                if not count:
-                    relevance += 5 if not count else 1
-        return float(relevance)/float(len(concordance2))
+        r = 0
+        l = len(concordance1)
+        for i in xrange(l):
+            if (not concordance1[i]) and (concordance1[i] == concordance2[i]):
+                r += 5
+        return r/float(l)
+
+
+def load_images():
+    d = defaultdict(list)
+    for letter in 'abcdefghijklmnopqrstuvwxyz':
+        letter_dir = os.path.join(ICON_LOC, letter)
+        for img in os.listdir(letter_dir):
+            if img != 'Thumbs.db' and img != '.gitignore':
+                i = Image.open(os.path.join(letter_dir, img))
+                v = i.getdata()
+                d[letter].append({'image': i, 'data': v})
+    return d
+
+
+images = load_images()
 
 
 def test():
-    for t in range(5):
-        session = requests.Session()
-        response = session.get('http://www.amazon.com/errors/validateCaptcha')
-        soup = BeautifulSoup(response.content)
-        with open('./%d_captcha.jpg' % t, 'wb') as f:
-            f.write(session.get(soup.find('img').get('src')).content)
+    # for t in range(5):
+    session = requests.Session()
+    response = session.get('http://www.amazon.com/errors/validateCaptcha')
+    soup = BeautifulSoup(response.content)
+    # with open('./%d_captcha.jpg' % t, 'wb') as f:
+    #     f.write(session.get(soup.find('img').get('src')).content)
 
-        cb = CaptchaBuster('./%d_captcha.jpg' % t)
-        print 'Pass %d:' % t, cb.guess
+    # cb = CaptchaBuster('./%d_captcha.jpg' % t)
+    cb = CaptchaBuster(StringIO(session.get(soup.find('img').get('src')).content))
+    print cb.guess
+    # print 'Pass %d:' % t, cb.guess
+
+
+class SessionTransferMiddleware(object):
+    """
+    Attach a new cookie jar to request when the status code is in the handle list.
+    """
+
+    current_cookie = 1
+    handle = [503]
+
+    def __init__(self, crawler):
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def process_response(self, request, response, spider):
+        if response.status in self.handle:
+            cookie = self.current_cookie + 1
+            self.logger.info('transferring request to new cookiejar. cookiejar={} {}'.format(cookie, request))
+            meta = request.meta
+            meta = meta.update({'cookiejar': cookie})
+            self.current_cookie = cookie
+            return request.replace(meta=meta)
+        return response
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        return cls(crawler)
 
 
 class RobotMiddleware(object):
 
     PRIORITY_ADJUST = 100
-    MAX_RETRY = 3
+    MAX_RETRY = 20
 
     def __init__(self, crawler):
         self.crawler = crawler
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.cracking = False
 
     def process_request(self, request, spider):
         return
+        # if request.meta.get('from_captchabuster_middleware', False):
+        #     return
+        # if self.cracking:
+        #     # Just keep juggling the request in memory/queue while the cracker is attempting to crack the
+        #     # first request
+        #     return request
 
-    def process_exception(self, request, exception, spider):
-        return
+    def request_image(self, request, response):
+
+        # Im using beautiful soup because recursive element selection is built in and makes it easier
+        # to parse the form inputs out into a dict.
+        soup = BeautifulSoup(response.body)
+        form = soup.find('form')
+
+        action = 'http://www.amazon.com' + form.get('action')
+        params = {x.get('name'): x.get('value') for x in form.findAll('input')}
+        url = form.find('img').get('src')
+
+        meta = {
+            'form_action': action,
+            'form_params': params,
+            'original_request': request.meta.get('original_request') or request,
+            'crack_retry_count': request.meta.get('crack_retry_count', 0) + 1,
+            'image_request': True,
+            'from_captchabuster_middleware': True
+        }
+
+        request.meta.update(meta)
+        return request.replace(url=url, dont_filter=True)
+
+    def process_image(self, request, response):
+        form_params = request.meta.get('form_params')
+        form_action = request.meta.get('form_action')
+
+        # Occasionally the image will come back with no data or no image but instead html,
+        # so retry the original request if that happens so that it filters back down the middleware
+        try:
+            picture = StringIO(response.body)
+            cb = CaptchaBuster(picture)
+            form_params['field-keywords'] = cb.guess
+        except IOError:
+            self.logger.warning('error processing image. {}'.format(response))
+            return request.meta.get('original_request').replace(dont_filter=True)
+        request.meta['image_request'] = False
+        request.meta['captcha_submit'] = True
+        url = form_action + '?' + urllib.urlencode(form_params)
+        return request.replace(url=url, dont_filter=True)
 
     def process_response(self, request, response, spider):
-        # self.logger.debug(request.meta)
-        crack_count = request.meta.get('crack_retry_count', 0) + 1
-        if crack_count >= self.MAX_RETRY:
+
+        if request.meta.get('crack_retry_count', 0) > self.MAX_RETRY:
             raise IgnoreRequest('Max retries exceeded %s' % request.meta.get('original_request', request))
+
         if isinstance(response, HtmlResponse) and 'robot check' in ''.join([x.strip().lower() for x in response.xpath('//title/text()').extract()]):
+            self.cracking = True
             self.crawler.stats.inc_value('robot_check')
             # Log the url of the original request that got blocked
-            self.logger.warning('robot check %s' % request)
-
-            soup = BeautifulSoup(response.body)
-            form = soup.find('form')
-
-            # url to send the captcha verification request
-            form_url = 'http://www.amazon.com' + form.get('action')
-
-            # get all input params in the form. the only ones that are in the form are hidden
-            input_params = {x.get('name'): x.get('value') for x in form.findAll('input')}
-
-            # self.logger.debug('input_params: %s' % ' - '.join(['{}={}'.format(k, v) for k, v in input_params.items()]))
-
-            # Sometimes the captcha cracker is wrong, which will redirect to another captcha and
-            # we want to use the original request url for our referer.
-            meta = {'target_url': form_url,
-                    'params': input_params,
-                    'referer_url': request.meta.get('referer_url') or response.url,
-                    'original_request': request,
-                    'is_captcha': True,
-                    'crack_retry_count': crack_count}
-            request.meta.update(meta)
-
-            image_url = form.find('img').get('src')
-            # self.logger.debug('image_url=%s' % image_url)
-            return Request(image_url, meta=request.meta, priority=self.PRIORITY_ADJUST, dont_filter=True, callback=request.callback)
-        elif request.meta.get('is_captcha', False):
-            params = request.meta.get('params')
-            target_url = request.meta.get('target_url')
-            # Occasionally the image will come back with no data, so retry
-            # the original request if that happens
-            try:
-                pic_data = StringIO(response.body)
-                cb = CaptchaBuster(pic_data)
-                params['field-keywords'] = cb.guess
-            except IOError:
-                return request.meta.get('original_request')
-            self.logger.info('captcha_value=%s %s' % (params['field-keywords'], request))
-            request.meta['is_captcha'] = False
-            meta = {'crack_retry_count': crack_count}
-            request.meta.update(meta)
-            return FormRequest(target_url, formdata=params, meta=request.meta, priority=self.PRIORITY_ADJUST, method='GET', dont_filter=True, callback=request.callback)
-        return response
+            self.logger.warning('robot check {}'.format(request.meta.get('original_request') or request))
+            return self.request_image(request, response)
+        elif request.meta.get('image_request', False):
+            self.logger.debug('processing image {}'.format(request))
+            return self.process_image(request, response)
+        else:
+            self.cracking = False
+            return response
 
     @classmethod
     def from_crawler(cls, crawler):
