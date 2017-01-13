@@ -59,7 +59,9 @@ class CaptchaBuster(object):
             session = requests.Session()
         h = requests.utils.default_headers()
         h['User-Agent'] = session.headers['User-Agent']
-        io = StringIO(session.get(url, headers=h).content)
+        h['Host'] = 'images-na.ssl-images-amazon.com'
+        h['Referer'] = 'https://www.amazon.com/errors/validateCaptcha'
+        io = StringIO(session.get(url.replace('http', 'https'), headers=h).content)
         return CaptchaBuster(io)
 
     def _pre_process_captcha(self):
