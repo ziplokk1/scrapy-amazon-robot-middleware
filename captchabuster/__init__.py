@@ -3,12 +3,25 @@ import os
 import logging
 from cStringIO import StringIO
 
-from BeautifulSoup import BeautifulSoup
 from PIL import Image
 import requests
 from collections import defaultdict
-from scrapy.exceptions import IgnoreRequest
-from scrapy.http.response.html import HtmlResponse
+
+# This way when using the lib for only requests, then it wont raise an error when loading the module.
+try:
+    from scrapy.exceptions import IgnoreRequest
+    from scrapy.http.response.html import HtmlResponse
+except ImportError:
+    pass
+
+# BeautifulSoup isnt necessary to use the captchabuster class.
+try:
+    from BeautifulSoup import BeautifulSoup
+except ImportError:
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        pass
 
 ROOT = os.path.abspath(os.path.dirname(__file__))
 ICON_LOC = os.path.join(ROOT, 'iconset')
@@ -130,6 +143,21 @@ class CaptchaBuster(object):
         return r/float(l)
 
 
+def crack_from_requests(session, content):
+    soup = BeautifulSoup(content)
+    form = soup.find('form')
+
+    action = 'http://www.amazon.com' + form.get('action')
+    params = {x.get('name'): x.get('value') for x in form.findAll('input')}
+
+    url = form.find('img').get('src')
+    cb = CaptchaBuster.from_url(url, session)
+    params['field-keywords'] = cb.guess
+
+    url = action + '?' + urllib.urlencode(params)
+    return session.get(url)
+
+
 def load_images():
     d = defaultdict(list)
     for letter in 'abcdefghijklmnopqrstuvwxyz':
@@ -194,15 +222,6 @@ class RobotMiddleware(object):
         self.crawler = crawler
         self.logger = logging.getLogger(self.__class__.__name__)
         self.cracking = False
-
-    def process_request(self, request, spider):
-        return
-        # if request.meta.get('from_captchabuster_middleware', False):
-        #     return
-        # if self.cracking:
-        #     # Just keep juggling the request in memory/queue while the cracker is attempting to crack the
-        #     # first request
-        #     return request
 
     def request_image(self, request, response):
 
