@@ -1,7 +1,7 @@
 import urllib
 import os
 import logging
-from cStringIO import StringIO
+from StringIO import StringIO
 
 from PIL import Image
 import requests
